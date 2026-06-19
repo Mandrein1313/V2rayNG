@@ -37,9 +37,11 @@ jobs:
           --channel=0 \
           --install "ndk;29.0.14206865"
         echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> $GITHUB_ENV
+        # ใช้ find ค้นหาไฟล์ build.gradle.kts ให้เจอ ไม่ว่าโฟลเดอร์จะซ้อนกี่ชั้น
+        BUILD_GRADLE=$(find ${{ github.workspace }} -name "build.gradle.kts" | grep "app/build.gradle.kts" | head -n 1)
         sed -i '10i\
         \
-            ndkVersion = "29.0.14206865"' ${{ github.workspace }}/V2rayNG/app/build.gradle.kts
+            ndkVersion = "29.0.14206865"' $BUILD_GRADLE
 
     - name: Restore cached libhevtun
       id: cache-libhevtun-restore
@@ -62,7 +64,9 @@ jobs:
 
     - name: Copy libhevtun
       run: |
-        cp -r ${{ github.workspace }}/libs ${{ github.workspace }}/V2rayNG/app
+        # ปรับการ Copy ให้หาโฟลเดอร์ app ที่แท้จริง
+        APP_DIR=$(find ${{ github.workspace }} -type d -name "app" | grep "V2rayNG/app" | head -n 1)
+        cp -r ${{ github.workspace }}/libs/* $APP_DIR/libs/ || cp -r ${{ github.workspace }}/libs $APP_DIR/
 
     - name: Fetch AndroidLibXrayLite tag
       run: |
@@ -73,12 +77,9 @@ jobs:
         popd
 
     - name: Download libv2ray
-      uses: robinraju/release-downloader@v1.13
-      with:
-        repository: '2dust/AndroidLibXrayLite'
-        tag: ${{ env.CURRENT_TAG }}
-        fileName: 'libv2ray.aar'
-        out-file-path: V2rayNG/app/libs/
+      run: |
+        APP_LIBS_DIR=$(find ${{ github.workspace }} -type d -name "libs" | grep "V2rayNG/app/libs" | head -n 1)
+        wget https://github.com/2dust/AndroidLibXrayLite/releases/download/${{ env.CURRENT_TAG }}/libv2ray.aar -P $APP_LIBS_DIR
 
     - name: Setup Java
       uses: actions/setup-java@v5
@@ -95,7 +96,8 @@ jobs:
 
     - name: Build APK
       run: |
-        cd ${{ github.workspace }}/V2rayNG
+        V2RAY_ROOT=$(find ${{ github.workspace }} -type d -name "V2rayNG" | head -n 1)
+        cd $V2RAY_ROOT
         echo "sdk.dir=${ANDROID_HOME}" > local.properties
         chmod 755 gradlew
         ./gradlew licenseFdroidReleaseReport
@@ -108,6 +110,8 @@ jobs:
         name: "Build APK #${{ github.run_number }}"
         draft: false
         prerelease: false
-        files: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*.apk
+        files: |
+          **/build/outputs/apk/*/release/*.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
