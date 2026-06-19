@@ -2,13 +2,8 @@ name: Build APK
 
 on:
   workflow_dispatch:
-    inputs:
-      release_tag:
-        required: false
-        type: string
   push:
-    branches:
-      - master
+    branches: [ "master" ]
 
 permissions:
   contents: write
@@ -16,7 +11,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v6
@@ -27,88 +21,26 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v4
       with:
-        log-accepted-android-sdk-licenses: false
         cmdline-tools-version: '14742923'
         packages: 'platforms;android-37.0 build-tools;37.0.0 platform-tools'
 
-    - name: Install NDK
-      run: |
-        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-          --channel=0 \
-          --install "ndk;29.0.14206865"
-        echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> $GITHUB_ENV
-        BUILD_GRADLE=$(find ${{ github.workspace }} -name "build.gradle.kts" | grep "app/build.gradle.kts" | head -n 1)
-        sed -i '10i\
-        \
-            ndkVersion = "29.0.14206865"' $BUILD_GRADLE
-
-    - name: Restore cached libhevtun
-      id: cache-libhevtun-restore
-      uses: actions/cache/restore@v5
-      with:
-        path: ${{ github.workspace }}/libs
-        key: libhevtun-${{ runner.os }}-${{ env.NDK_HOME }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('**/compile-hevtun.sh') }}
-
     - name: Build libhevtun
-      if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
       run: |
-        # ค้นหาตำแหน่งไฟล์สคริปต์จริงๆ แล้วรัน
+        # ค้นหาไฟล์สคริปต์ที่แท้จริง
         COMPILE_SCRIPT=$(find ${{ github.workspace }} -name "compile-hevtun.sh" | head -n 1)
         bash $COMPILE_SCRIPT
     
-    - name: Save libhevtun
-      if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v5
-      with:
-        path: ${{ github.workspace }}/libs
-        key: libhevtun-${{ runner.os }}-${{ env.NDK_HOME }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('**/compile-hevtun.sh') }}
-
     - name: Copy libhevtun
       run: |
+        # หาที่เก็บไฟล์ libs หลังคอมไพล์ และที่เก็บ app
+        LIBS_DIR=$(find ${{ github.workspace }} -type d -name "libs" | grep -v "app/libs" | head -n 1)
         APP_DIR=$(find ${{ github.workspace }} -type d -name "app" | grep "V2rayNG/app" | head -n 1)
         mkdir -p $APP_DIR/libs
-        cp -r ${{ github.workspace }}/libs/* $APP_DIR/libs/ || cp -r ${{ github.workspace }}/libs $APP_DIR/
-
-    - name: Fetch AndroidLibXrayLite tag
-      run: |
-        pushd AndroidLibXrayLite
-        CURRENT_TAG=$(git describe --tags --abbrev=0)
-        echo "CURRENT_TAG=$CURRENT_TAG" >> $GITHUB_ENV
-        popd
-
-    - name: Download libv2ray
-      run: |
-        APP_LIBS_DIR=$(find ${{ github.workspace }} -type d -name "libs" | grep "V2rayNG/app/libs" | head -n 1)
-        wget https://github.com/2dust/AndroidLibXrayLite/releases/download/${{ env.CURRENT_TAG }}/libv2ray.aar -P $APP_LIBS_DIR
-
-    - name: Setup Java
-      uses: actions/setup-java@v5
-      with:
-        distribution: 'temurin'
-        java-version: '21'
-
-    - name: Decode Keystore
-      uses: timheuer/base64-to-file@v2.0.0
-      id: android_keystore
-      with:
-        fileName: "android_keystore.jks"
-        encodedString: ${{ secrets.APP_KEYSTORE_BASE64 }}
+        cp -r $LIBS_DIR/* $APP_DIR/libs/
 
     - name: Build APK
       run: |
+        # ค้นหาตำแหน่งโปรเจกต์ Android จริงๆ
         V2RAY_ROOT=$(find ${{ github.workspace }} -type d -name "V2rayNG" | head -n 1)
         cd $V2RAY_ROOT
-        echo "sdk.dir=${ANDROID_HOME}" > local.properties
-        chmod 755 gradlew
-        ./gradlew licenseFdroidReleaseReport
-        ./gradlew assembleRelease -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
-    
-    - name: Upload to Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: "build-${{ github.run_number }}"
-        name: "Build APK #${{ github.run_number }}"
-        files: |
-          **/build/outputs/apk/*/release/*.apk
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        ./gradlew assembleRelease
