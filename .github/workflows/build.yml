@@ -37,7 +37,6 @@ jobs:
           --channel=0 \
           --install "ndk;29.0.14206865"
         echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> $GITHUB_ENV
-        # ใช้ find ค้นหาไฟล์ build.gradle.kts ให้เจอ ไม่ว่าโฟลเดอร์จะซ้อนกี่ชั้น
         BUILD_GRADLE=$(find ${{ github.workspace }} -name "build.gradle.kts" | grep "app/build.gradle.kts" | head -n 1)
         sed -i '10i\
         \
@@ -48,31 +47,32 @@ jobs:
       uses: actions/cache/restore@v5
       with:
         path: ${{ github.workspace }}/libs
-        key: libhevtun-${{ runner.os }}-${{ env.NDK_HOME }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('compile-hevtun.sh') }}
+        key: libhevtun-${{ runner.os }}-${{ env.NDK_HOME }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('**/compile-hevtun.sh') }}
 
     - name: Build libhevtun
       if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
       run: |
-        bash compile-hevtun.sh
+        # ค้นหาตำแหน่งไฟล์สคริปต์จริงๆ แล้วรัน
+        COMPILE_SCRIPT=$(find ${{ github.workspace }} -name "compile-hevtun.sh" | head -n 1)
+        bash $COMPILE_SCRIPT
     
     - name: Save libhevtun
       if: steps.cache-libhevtun-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@v5
       with:
         path: ${{ github.workspace }}/libs
-        key: libhevtun-${{ runner.os }}-${{ env.NDK_HOME }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('compile-hevtun.sh') }}
+        key: libhevtun-${{ runner.os }}-${{ env.NDK_HOME }}-${{ hashFiles('.git/modules/hev-socks5-tunnel/HEAD') }}-${{ hashFiles('**/compile-hevtun.sh') }}
 
     - name: Copy libhevtun
       run: |
-        # ปรับการ Copy ให้หาโฟลเดอร์ app ที่แท้จริง
         APP_DIR=$(find ${{ github.workspace }} -type d -name "app" | grep "V2rayNG/app" | head -n 1)
+        mkdir -p $APP_DIR/libs
         cp -r ${{ github.workspace }}/libs/* $APP_DIR/libs/ || cp -r ${{ github.workspace }}/libs $APP_DIR/
 
     - name: Fetch AndroidLibXrayLite tag
       run: |
         pushd AndroidLibXrayLite
         CURRENT_TAG=$(git describe --tags --abbrev=0)
-        echo "Current tag in this repo: $CURRENT_TAG"
         echo "CURRENT_TAG=$CURRENT_TAG" >> $GITHUB_ENV
         popd
 
@@ -108,8 +108,6 @@ jobs:
       with:
         tag_name: "build-${{ github.run_number }}"
         name: "Build APK #${{ github.run_number }}"
-        draft: false
-        prerelease: false
         files: |
           **/build/outputs/apk/*/release/*.apk
       env:
