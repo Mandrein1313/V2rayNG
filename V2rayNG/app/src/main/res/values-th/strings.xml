@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">v2rayNG</string>
+    <string name="title_settings">การตั้งค่า</string>
+    <string name="title_advanced">การตั้งค่าขั้นสูง</string>
+    <string name="title_server">เซิร์ฟเวอร์</string>
+    <string name="title_about">เกี่ยวกับ</string>
+    <string name="toast_success">สำเร็จ</string>
+    <string name="toast_failure">ล้มเหลว</string>
+    <string name="menu_item_add_config">เพิ่มเซิร์ฟเวอร์</string>
+    <string name="menu_item_save_config">บันทึก</string>
+    <string name="menu_item_del_config">ลบ</string>
+    <string name="server_lab_remarks">ชื่อ</string>
+    <string name="server_lab_address">ที่อยู่</string>
+    <string name="server_lab_port">พอร์ต</string>
+    <string name="toast_invalid_url">URL ไม่ถูกต้อง</string>
+</resources>
